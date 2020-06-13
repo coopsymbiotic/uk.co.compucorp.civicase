@@ -1,12 +1,17 @@
 name: Backstop Tests
 
-on: pull_request
+on:
+  pull_request:
+    types:
+      - labeled
 
 jobs:
   run-backstop-tests:
-
+    if: github.event.label.name == 'run backstop'
     runs-on: ubuntu-latest
-    container: compucorp/civicrm-buildkit:1.0.0-chrome
+    container:
+      image: compucorp/civicrm-buildkit:1.0.0-chrome
+      options: --shm-size=2gb --cap-add=SYS_ADMIN
 
     env:
       CIVICRM_EXTENSIONS_DIR: site/web/sites/all/modules/civicrm/tools/extensions
@@ -38,20 +43,21 @@ jobs:
           chmod -R 777 /buildkit
           chmod -R 777 /github/home/.amp
           /usr/sbin/apache2ctl restart
-          amp test
 
       - name: Build Drupal site
-        run: civibuild create drupal-clean --civi-ver 5.24.6 --web-root $GITHUB_WORKSPACE/site
-
-      - uses: actions/checkout@v2
-        with:
-            path: ${{ env.CIVICRM_EXTENSIONS_DIR }}/uk.co.compucorp.civicase
+        run: |
+          civibuild create drupal-clean --civi-ver 5.24.6 --web-root $GITHUB_WORKSPACE/site
+          chmod -R 777 /__w/uk.co.compucorp.civicase/uk.co.compucorp.civicase
 
       - name: Installing CiviCase and its dependencies
         working-directory: ${{ env.CIVICRM_EXTENSIONS_DIR }}
         run: |
+          git clone https://github.com/compucorp/uk.co.compucorp.civicase.git
           git clone --depth 1 https://github.com/civicrm/org.civicrm.shoreditch.git
           cv en shoreditch civicase
+          drush cc all && drush cc civicrm
+          drush cvapi Extension.upgrade
+          drush cc all && drush cc civicrm
 
       - name: Create site-config.json for Backstop tests
         working-directory: ${{ env.CIVICRM_EXTENSIONS_DIR }}/uk.co.compucorp.civicase
@@ -64,11 +70,37 @@ jobs:
           echo '"root": "/__w/uk.co.compucorp.civicase/uk.co.compucorp.civicase/site/web"' >> site-config.json
           echo "}" >> site-config.json
 
-          cat site-config.json
-
-      - name: Run Backstop tests
-        working-directory: ${{ env.CIVICRM_EXTENSIONS_DIR }}/uk.co.compucorp.civicase
+      - name: Install Backstop tests
+        working-directory: ${{ env.CIVICRM_EXTENSIONS_DIR }}/uk.co.compucorp.civicase/tests/backstop_data
         run: |
-          cd tests/backstop_data
+          npm install
+
+      - name: Reference Screenshots in "master" Branch
+        working-directory: ${{ env.CIVICRM_EXTENSIONS_DIR }}/uk.co.compucorp.civicase/tests/backstop_data
+        run: |
+          git reset --hard
+          # moment is not added to master, so for testing, using same branch
+          git checkout "${{ github.head_ref }}"
           npm install
           npx gulp backstopjs:reference
+
+      - name: Test Screenshots in "${{ github.head_ref }}" Branch
+        working-directory: ${{ env.CIVICRM_EXTENSIONS_DIR }}/uk.co.compucorp.civicase/tests/backstop_data
+        run: |
+          git reset --hard
+          git checkout "${{ github.head_ref }}"
+          npx gulp backstopjs:test
+
+      - name: Prepare test report for download
+        if: ${{ always() }}
+        working-directory: ${{ env.CIVICRM_EXTENSIONS_DIR }}/uk.co.compucorp.civicase/tests/backstop_data
+        run: |
+          mkdir backstop_report
+          cp -r html_report backstop_report
+          cp -r screenshots backstop_report
+
+      - uses: actions/upload-artifact@v2
+        if: ${{ always() }}
+        with:
+          name: backstop-report
+          path: ${{ env.CIVICRM_EXTENSIONS_DIR }}/uk.co.compucorp.civicase/tests/backstop_data/backstop_report
