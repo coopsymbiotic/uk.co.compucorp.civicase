@@ -15,6 +15,7 @@ jobs:
 
     env:
       CIVICRM_EXTENSIONS_DIR: site/web/sites/all/modules/civicrm/tools/extensions
+      DRUPAL_THEME_DIR: site/web/sites/all/themes
 
     services:
       mysql:
@@ -44,12 +45,18 @@ jobs:
           chmod -R 777 /github/home/.amp
           /usr/sbin/apache2ctl restart
 
+      - uses: actions/checkout@v2
+      - uses: actions/setup-node@v1
+        with:
+          node-version: '10.15.3'
+
       - name: Build Drupal site
         run: |
+          node -v
           civibuild create drupal-clean --civi-ver 5.24.6 --web-root $GITHUB_WORKSPACE/site
           chmod -R 777 /__w/uk.co.compucorp.civicase/uk.co.compucorp.civicase
 
-      - name: Installing CiviCase and its dependencies
+      - name: Installing CiviCase and Shoreditch
         working-directory: ${{ env.CIVICRM_EXTENSIONS_DIR }}
         run: |
           git clone https://github.com/compucorp/uk.co.compucorp.civicase.git
@@ -57,6 +64,24 @@ jobs:
           cv en shoreditch civicase
           drush cc all && drush cc civicrm
           drush cvapi Extension.upgrade
+          drush en civicrmtheme -y
+          drush dl bootstrap -y
+          drush en bootstrap -y
+          drush vset theme_default bootstrap
+
+      - name: Installing Shoreditch Companion Theme
+        working-directory: ${{ env.DRUPAL_THEME_DIR }}
+        run: |
+          mkdir shoreditch_companion_d7_theme
+          cd shoreditch_companion_d7_theme/
+          git clone https://github.com/compucorp/shoreditch-companion-d7-theme.git
+          drush en -y shoreditch_companion_d7_theme
+          drush vset civicrmtheme_theme_admin shoreditch_companion_d7_theme
+
+          drush sql-query "UPDATE block SET status = 0 WHERE theme='shoreditch_companion_d7_theme' AND module='civicrm' AND delta IN ('1', '2', '3', '4', '5');" -y
+          drush sql-query "UPDATE block SET status = 0 WHERE theme='shoreditch_companion_d7_theme' AND module='search' AND delta='form';" -y
+          drush sql-query "UPDATE block SET status = 0 WHERE theme='shoreditch_companion_d7_theme' AND module='system' AND delta IN ('navigation', 'powered-by');" -y
+
           drush cc all && drush cc civicrm
 
       - name: Create site-config.json for Backstop tests
@@ -79,13 +104,14 @@ jobs:
         working-directory: ${{ env.CIVICRM_EXTENSIONS_DIR }}/uk.co.compucorp.civicase/tests/backstop_data
         run: |
           git reset --hard
-          # moment is not added to master, so for testing, using same branch
           git checkout "${{ github.head_ref }}"
           npm install
+          npx gulp backstopjs:setup-data
           npx gulp backstopjs:reference
 
       - name: Test Screenshots in "${{ github.head_ref }}" Branch
         working-directory: ${{ env.CIVICRM_EXTENSIONS_DIR }}/uk.co.compucorp.civicase/tests/backstop_data
+        continue-on-error: true
         run: |
           git reset --hard
           git checkout "${{ github.head_ref }}"
