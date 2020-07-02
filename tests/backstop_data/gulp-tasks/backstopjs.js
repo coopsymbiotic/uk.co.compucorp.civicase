@@ -32,17 +32,21 @@ var CONFIG_TPL = {
   root: '%{path-to-site-root}'
 };
 var FILES = {
+  sampleUploadFile: 'sample.txt',
   siteConfig: 'site-config.json',
   temp: 'backstop.temp.json',
   tpl: 'backstop.tpl.json'
 };
 var RECORD_IDENTIFIERS = {
   activeContactDisplayName: 'Arnold Backstop',
+  activeContactEmail: 'arnold@backstop.com',
   customGroupTitle: 'Backstop Case Custom Group',
   customFieldLabel: 'Backstop Case Custom Field',
+  caseSubject: 'Backstop Case',
   emptyCaseSubject: 'Backstop Empty Case',
-  emptyCaseTypeName: 'backstop_empty_case_type',
+  emptyCaseTypeName: 'backstop_case_type',
   emptyContactDisplayName: 'Emil Backstop',
+  emptyContactEmail: 'emil@backstop.com',
   fileUploadActivitySubject: 'Backstop File Upload'
 };
 var URL_VAR_REPLACERS = [
@@ -55,7 +59,9 @@ var URL_VAR_REPLACERS = [
 var createUniqueActivity = createUniqueRecordFactory('Activity', ['subject']);
 var createUniqueAttachment = createUniqueRecordFactory('Attachment', ['entity_id', 'entity_table']);
 var createUniqueCase = createUniqueRecordFactory('Case', ['subject']);
+var createUniqueEmail = createUniqueRecordFactory('Email', ['email']);
 var createUniqueCaseType = createUniqueRecordFactory('CaseType', ['name']);
+var createUniqueRelationship = createUniqueRecordFactory('Relationship', ['description']);
 var createUniqueContact = createUniqueRecordFactory('Contact', ['display_name']);
 var createUniqueCustomField = createUniqueRecordFactory('CustomField', ['label']);
 var createUniqueCustomGroup = createUniqueRecordFactory('CustomGroup', ['title']);
@@ -154,7 +160,7 @@ function createUniqueRecordFactory (entityName, matchingFields) {
    * @returns {object} the returned value from the API.
    */
   return function createUniqueRecord (recordData) {
-    var filter = { options: { limit: 1 } };
+    var filter = { options: { limit: 1 }, sequential: 1 };
 
     matchingFields.forEach((matchingField) => {
       filter[matchingField] = recordData[matchingField];
@@ -386,35 +392,96 @@ function runBackstopJS (command) {
  * @returns {Promise} An empty promise that is resolved when the task is done.
  */
 function setupData () {
-  var activeCaseId = getActiveCaseId();
+  // var activeCaseId = getActiveCaseId();
   var caseType = createUniqueCaseType({
     name: RECORD_IDENTIFIERS.emptyCaseTypeName,
     case_type_category: 'Cases',
-    title: 'Backstop Empty Case Type',
+    title: 'Backstop Case Type',
     definition: {
-      activityTypes: [],
+      activityTypes: [{
+        name: 'Open Case',
+        max_instances: '1'
+      }, {
+        name: 'Follow up'
+      }, {
+        name: 'File Upload'
+      }],
       activitySets: [],
-      caseRoles: [{ name: 'Case Coordinator is', manager: '1', creator: '1' }],
+      caseRoles: [
+        {
+          name: 'Homeless Services Coordinator',
+          creator: '1',
+          manager: '0'
+        }, {
+          name: 'Health Services Coordinator',
+          manager: '0'
+        }, {
+          name: 'Benefits Specialist',
+          manager: '1'
+        }
+      ],
       timelineActivityTypes: []
     }
   });
+
   var activeContact = createUniqueContact({
     contact_type: 'Individual',
     display_name: RECORD_IDENTIFIERS.activeContactDisplayName
   });
+  createUniqueEmail({
+    contact_id: activeContact.id,
+    email: RECORD_IDENTIFIERS.activeContactEmail
+  });
   var emptyContact = createUniqueContact({
     contact_type: 'Individual',
-    display_name: RECORD_IDENTIFIERS.emptyContactDisplayName
+    display_name: RECORD_IDENTIFIERS.emptyContactDisplayName,
+    email: RECORD_IDENTIFIERS.emptyContactEmail
   });
+  createUniqueEmail({
+    contact_id: emptyContact.id,
+    email: RECORD_IDENTIFIERS.emptyContactEmail
+  });
+
+  var caseIds = createCases(caseType, activeContact, emptyContact);
+  createActivities(caseIds[0], activeContact);
+
+  createUniqueRelationship({
+    contact_id_a: activeContact.id,
+    relationship_type_id: '14',
+    start_date: 'now',
+    end_date: null,
+    contact_id_b: emptyContact.id,
+    case_id: caseIds[0],
+    description: 'Manager Role Assigned'
+  });
+
+  createUniqueRelationship({
+    contact_id_a: activeContact.id,
+    relationship_type_id: '11',
+    start_date: 'now',
+    end_date: null,
+    contact_id_b: emptyContact.id,
+    case_id: caseIds[0],
+    description: 'Homeless Coordinator Assigned'
+  });
+
   var fileUploadActivity = createUniqueActivity({
     activity_type_id: 'File Upload',
-    case_id: activeCaseId,
+    case_id: caseIds[0],
     source_contact_id: activeContact.id,
     subject: RECORD_IDENTIFIERS.fileUploadActivitySubject
   });
+
   var customGroup = createUniqueCustomGroup({
     title: RECORD_IDENTIFIERS.customGroupTitle,
     extends: 'Case'
+  });
+
+  createUniqueCustomField({
+    custom_group_id: customGroup.id,
+    label: RECORD_IDENTIFIERS.customFieldLabel,
+    data_type: 'String',
+    html_type: 'Text'
   });
 
   createUniqueAttachment({
@@ -424,20 +491,70 @@ function setupData () {
     name: 'backstop-file-upload.png',
     mime_type: 'image/png'
   });
-  createUniqueCase({
+
+  createSampleUploadFile();
+
+  return Promise.resolve();
+}
+
+/**
+ * Create Sample Upload File
+ */
+function createSampleUploadFile () {
+  fs.writeFileSync(FILES.sampleUploadFile, 'Sample Text');
+}
+
+/**
+ * Create Activities
+ *
+ * @param {number} caseId case id
+ * @param {object} activeContact active contact
+ * @returns {Array} list of activity ids
+ */
+function createActivities (caseId, activeContact) {
+  var activityIds = [];
+
+  for (var i = 1; i <= 30; i++) {
+    activityIds.push(createUniqueActivity({
+      activity_type_id: 'Follow up',
+      case_id: caseId,
+      source_contact_id: activeContact.id,
+      subject: 'Follow Up ' + i,
+      activity_date_time: moment().startOf('month').format('YYYY-MM-DD')
+    }).id);
+  }
+
+  return activityIds;
+}
+
+/**
+ * Create Cases
+ *
+ * @param {object} caseType case type
+ * @param {object} activeContact active contact
+ * @param {object} emptyContact empty contact
+ * @returns {Array} list of case ids
+ */
+function createCases (caseType, activeContact, emptyContact) {
+  var caseIds = [];
+
+  for (var i = 1; i <= 17; i++) {
+    caseIds.push(createUniqueCase({
+      case_type_id: caseType.id,
+      contact_id: activeContact.id,
+      creator_id: activeContact.id,
+      subject: RECORD_IDENTIFIERS.caseSubject + i
+    }).id);
+  }
+
+  caseIds.push(createUniqueCase({
     case_type_id: caseType.id,
     contact_id: emptyContact.id,
     creator_id: emptyContact.id,
     subject: RECORD_IDENTIFIERS.emptyCaseSubject
-  });
-  createUniqueCustomField({
-    custom_group_id: customGroup.id,
-    label: RECORD_IDENTIFIERS.customFieldLabel,
-    data_type: 'String',
-    html_type: 'Text'
-  });
+  }).id);
 
-  return Promise.resolve();
+  return caseIds;
 }
 
 /**

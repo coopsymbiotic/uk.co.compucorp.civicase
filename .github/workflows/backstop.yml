@@ -52,7 +52,6 @@ jobs:
 
       - name: Build Drupal site
         run: |
-          node -v
           civibuild create drupal-clean --civi-ver 5.24.6 --web-root $GITHUB_WORKSPACE/site
           chmod -R 777 /__w/uk.co.compucorp.civicase/uk.co.compucorp.civicase
 
