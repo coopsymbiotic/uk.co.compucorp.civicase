@@ -61,7 +61,6 @@ jobs:
           git clone https://github.com/compucorp/uk.co.compucorp.civicase.git
           git clone --depth 1 https://github.com/civicrm/org.civicrm.shoreditch.git
           cv en shoreditch civicase
-          drush cc all && drush cc civicrm
           drush cvapi Extension.upgrade
           drush en civicrmtheme -y
           drush dl bootstrap -y
@@ -93,11 +92,6 @@ jobs:
           echo '"drush_alias": "",' >> site-config.json
           echo '"root": "/__w/uk.co.compucorp.civicase/uk.co.compucorp.civicase/site/web"' >> site-config.json
           echo "}" >> site-config.json
-
-      - name: Install Backstop tests
-        working-directory: ${{ env.CIVICRM_EXTENSIONS_DIR }}/uk.co.compucorp.civicase/tests/backstop_data
-        run: |
-          npm install
 
       - name: Reference Screenshots in "master" Branch
         continue-on-error: true
