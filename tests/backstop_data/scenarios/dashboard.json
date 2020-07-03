@@ -35,7 +35,7 @@
     {
       "label": "Civicase - Dashboard - Add case modal",
       "url": "{url}/civicrm/case/a/#/case?case_type_category=cases&drel=all",
-      "clickSelector": ".civicase__affix__activity-filters .pull-right > span:nth-of-type(2) .civicase__dashboard__action-btn",
+      "clickSelector": ".civicase__dashboard__action-btn[ng-controller='AddCaseDashboardActionButtonController']",
       "waitForUIModalLoad": true
     }
   ]
