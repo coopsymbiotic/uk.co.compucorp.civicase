@@ -76,8 +76,8 @@ class CRM_Civicase_Hook_Permissions_CaseCategory {
       $caseCategoryPermissions = $this->permissionService->get($caseTypeCategory);
       foreach ($caseCategoryPermissions as $caseCategoryPermission) {
         $this->permissions[$caseCategoryPermission['name']] = [
-          $caseCategoryPermission['label'],
-          $caseCategoryPermission['description'],
+          'label' => $caseCategoryPermission['label'],
+          'description' => $caseCategoryPermission['description'],
         ];
       }
     }

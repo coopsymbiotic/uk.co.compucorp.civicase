@@ -1,5 +1,7 @@
 <?php
 
+use CRM_Civicase_ExtensionUtil as E;
+
 /**
  * Adds cases and reports export permissions.
  */
@@ -41,8 +43,8 @@ class CRM_Civicase_Hook_Permissions_ExportCasesAndReports {
    */
   private function addExportPermission() {
     $this->permissions[self::PERMISSION_NAME] = [
-      'CiviCase: ' . self::PERMISSION_NAME,
-      ts('Access export action in manage cases and reports'),
+      'label' => 'CiviCase: ' . self::PERMISSION_NAME,
+      'description' => E::ts('Access export action in manage cases and reports'),
     ];
   }
 
