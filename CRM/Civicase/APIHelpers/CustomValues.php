@@ -20,7 +20,12 @@ class CRM_Civicase_APIHelpers_CustomValues {
     ];
 
     $entities = civicrm_api3('Entity', 'get');
-    $entities = array_diff($entities['values'], $entities['deprecated']);
+    if (!empty($entities['deprecated'])) {
+      $entities = array_diff($entities['values'], $entities['deprecated']);
+    }
+    else {
+      $entities = $entities['values'];
+    }
     $spec['entity_type'] = [
       'title' => 'Entity Type',
       'description' => 'API name of entity type, e.g. "Contact"',
